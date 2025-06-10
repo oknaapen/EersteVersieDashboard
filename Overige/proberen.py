@@ -125,31 +125,72 @@ if st.session_state.get("data_ok", False):
             if bron != "Alles":
                 df1 = df1[df1["bron"] == bron]
 
-            # Tijdkolom maken
-            if tijdseenheid == "maand":
-                df1["tijd"] = df1["datum"].dt.to_period("M").astype(str)
-                xlabel = "Maand"
-            else:
+            # # Tijdkolom maken
+            if tijdseenheid == "week":
                 df1["tijd"] = df1["datum"].dt.to_period("W").astype(str)
                 xlabel = "Week"
 
-            # --- WISSELEN TUSSEN DRIE WEERGAVES ---
+
             if weergave_optie == "Lijngrafiek":
-                tijdlijn = df1["tijd"].value_counts().sort_index()
-                if tijdlijn.empty:
-                    st.info("Geen meldingen gevonden.")
+                if tijdseenheid == "maand":
+                    st.markdown("#### 📋 Totaal aantal meldingen per hoofdcategorie (weergave per Maand)")
+
+                    totaal_per_categorie = df1["hoofdcategorie"].value_counts()
+
+                    if totaal_per_categorie.empty:
+                        st.info("Geen meldingen gevonden.")
+                    else:
+                        for categorie, aantal in totaal_per_categorie.items():
+                            st.metric(label=categorie, value=int(aantal))
+                            for categorie, aantal in totaal_per_categorie.items():
+                                st.metric(label=categorie, value=int(aantal))
+
+                                # === Extra: Cirkel en tabel per subcategorie van de gekozen hoofdcategorie ===
+                                if hoofdcategorie != "Alles":
+                                    st.markdown(f"#### 📊 Verdeling binnen '{hoofdcategorie}'")
+
+                                    df_sub = df1[df1["hoofdcategorie"] == hoofdcategorie]
+                                    subverdeling = df_sub["subcategorie"].value_counts()
+
+                                    if subverdeling.empty:
+                                        st.info("Geen subcategorieën gevonden.")
+                                    else:
+                                        # Twee kolommen: links cirkel, rechts tabel
+                                        cirkel_col, tabel_col = st.columns(2)
+
+                                        with cirkel_col:
+                                            fig, ax = plt.subplots()
+                                            ax.pie(subverdeling, labels=subverdeling.index, autopct="%1.1f%%",
+                                                   startangle=90, textprops={'color': 'white'})
+                                            ax.set_title("Subcategorieën binnen hoofdcategorie", color="white")
+                                            fig.patch.set_facecolor("black")
+                                            ax.set_facecolor("black")
+                                            st.pyplot(fig)
+
+                                        with tabel_col:
+                                            st.markdown("##### 📋 Aantal meldingen per subcategorie")
+                                            st.dataframe(subverdeling.rename("Aantal").reset_index().rename(
+                                                columns={"index": "Subcategorie"}), use_container_width=True)
+
+                        st.session_state["grafiek_kwadrant1"] = None  # Geen grafiek opslaan
+
                 else:
-                    fig1, ax1 = plt.subplots()
-                    fig1.patch.set_facecolor('black')
-                    ax1.plot(tijdlijn.index, tijdlijn.values, marker='o', color='cyan')
-                    ax1.set_title(f"Aantal klachten per {tijdseenheid}", color='white')
-                    ax1.set_xlabel(xlabel, color='white')
-                    ax1.set_ylabel("Aantal klachten", color='white')
-                    ax1.set_facecolor("black")
-                    ax1.tick_params(axis='x', colors='white', rotation=45)
-                    ax1.tick_params(axis='y', colors='white')
-                    st.pyplot(fig1, use_container_width=True)
-                    st.session_state["grafiek_kwadrant1"] = fig1
+                    tijdlijn = df1["tijd"].value_counts().sort_index()
+                    if tijdlijn.empty:
+                        st.info("Geen meldingen gevonden.")
+                    else:
+                        fig1, ax1 = plt.subplots()
+                        fig1.patch.set_facecolor('black')
+                        ax1.plot(tijdlijn.index, tijdlijn.values, marker='o', color='cyan')
+                        ax1.set_title(f"Aantal klachten per {tijdseenheid}", color='white')
+                        ax1.set_xlabel(xlabel, color='white')
+                        ax1.set_ylabel("Aantal klachten", color='white')
+                        ax1.set_facecolor("black")
+                        ax1.tick_params(axis='x', colors='white', rotation=45)
+                        ax1.tick_params(axis='y', colors='white')
+                        st.pyplot(fig1, use_container_width=True)
+                        st.session_state["grafiek_kwadrant1"] = fig1
+
 
             elif weergave_optie == "Verhoudingen":
                 verdeling = df1["hoofdcategorie"].value_counts()
