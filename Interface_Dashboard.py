@@ -86,20 +86,41 @@ if st.session_state.get("data_ok", False):
         # Maak twee kolommen naast elkaar
         col_links, col_rechts = st.columns([5, 5])
 
+        st.markdown("""
+            <style>
+            div[role="radiogroup"] > label > div[data-testid="stMarkdownContainer"] > p {
+                color: white !important;
+                font-weight: bold;
+            }
+            </style>
+        """, unsafe_allow_html=True)
+
         # ===================== KWADRANT 1: AANTALLEN ===================== #
-        # ===================== KWADRANT 1: AANTALLEN ===================== #
+        st.markdown("""
+            <style>
+            div[role="radiogroup"] label {
+                color: white !important;
+            }
+            div[role="radiogroup"] label div[data-testid="stMarkdownContainer"] p {
+                color: white !important;
+            }
+            </style>
+        """, unsafe_allow_html=True)
+
         with col_links:
             st.markdown("### 📈 Klachten in de tijd")
+
             # --- Keuzeknoppen voor weergave ---
             weergave_optie = st.radio("Kies uw visualisatie:", [
                 "📊 Totaal aantal meldingen over de maand",
-                "📈 Verdeling per hoofdcategorie (grafiek)",
+                "📈 Verdeling",
                 "🗺️ Meldingen op de kaart",
                 "📋 Totaal aantal meldingen per hoofdcategorie",
-                "🏘️ Meldingen per wijk"
+                "🏘️ Meldingen per wijk",
+                "❌ Wis selectie"
             ], horizontal=False)
 
-            # --- Filters bovenaan plaatsen ---
+            # --- Filters ---
             st.markdown("### 🔍 Filters")
             hoofdcategorie = st.selectbox("Hoofdcategorie", ["Alles"] + sorted(df["hoofdcategorie"].dropna().unique()))
             if hoofdcategorie in subcategorie_dict:
@@ -109,7 +130,7 @@ if st.session_state.get("data_ok", False):
             subcategorie = st.selectbox("Subcategorie", sub_opties)
             bron = st.selectbox("Bron", ["Alles"] + sorted(df["bron"].dropna().unique()))
 
-            # Filteren uitvoeren
+            # Filter toepassen
             df1 = df.copy()
             if hoofdcategorie != "Alles":
                 df1 = df1[df1["hoofdcategorie"] == hoofdcategorie]
@@ -118,29 +139,38 @@ if st.session_state.get("data_ok", False):
             if bron != "Alles":
                 df1 = df1[df1["bron"] == bron]
 
-            # Tijdkolom maken voor weekgrafiek
-            df1["tijd"] = df1["datum"].dt.strftime("%G-W%V")
+            # Weektijdkolom aanmaken
+            df1["tijd"] = df1["datum"].dt.strftime("%G-W%V (%d-%m-%Y)")
 
-            # === Totaal aantal meldingen over de maand (lijn per week) ===
-            if weergave_optie == "📊 Totaal aantal meldingen over de maand":
+            # === 📊 Lijngrafiek meldingen over tijd ===
+            if weergave_optie in ["📊 Totaal aantal meldingen over de maand", "❌ Wis selectie"]:
                 tijdlijn = df1["tijd"].value_counts().sort_index()
                 if tijdlijn.empty:
                     st.info("Geen meldingen gevonden.")
                 else:
                     fig1, ax1 = plt.subplots()
                     fig1.patch.set_facecolor('black')
-                    ax1.plot(tijdlijn.index, tijdlijn.values, marker='o', color='cyan')
+                    ax1.plot(tijdlijn.index, tijdlijn.values, color='cyan', linewidth=2)
+                    ax1.scatter(tijdlijn.index, tijdlijn.values, color='red', edgecolors='white', zorder=5)
                     ax1.set_title("Totaal aantal klachten per week", color='white')
-                    ax1.set_xlabel("Weeknummer", color='white')
+                    ax1.set_xlabel("Weeknummer (Datum)", color='white')
                     ax1.set_ylabel("Aantal klachten", color='white')
                     ax1.set_facecolor("black")
-                    ax1.tick_params(axis='x', colors='white', rotation=45)
+
+                    x_values = list(tijdlijn.index)
+                    if len(x_values) >= 4:
+                        indices = [0, len(x_values) // 3, 2 * len(x_values) // 3, len(x_values) - 1]
+                        ax1.set_xticks([x_values[i] for i in indices])
+                        ax1.set_xticklabels([x_values[i] for i in indices], rotation=90, color='white')
+                    else:
+                        ax1.set_xticklabels(x_values, rotation=90, color='white')
+
                     ax1.tick_params(axis='y', colors='white')
                     st.pyplot(fig1, use_container_width=True)
                     st.session_state["grafiek_kwadrant1"] = fig1
 
-            # === Verhoudingen meldingen ===
-            elif weergave_optie == "📈 Verdeling per hoofdcategorie (grafiek)":
+            # === 📈 Verdeling per hoofdcategorie ===
+            elif weergave_optie == "📈 Verdeling":
                 verdeling = df1["hoofdcategorie"].value_counts()
                 if verdeling.empty:
                     st.info("Geen meldingen gevonden.")
@@ -152,7 +182,23 @@ if st.session_state.get("data_ok", False):
                     st.pyplot(fig2, use_container_width=True)
                     st.session_state["grafiek_kwadrant2"] = fig2
 
-            # === Kaart ===
+                    if hoofdcategorie != "Alles":
+                        st.markdown(f"#### 📊 Subverdeling binnen '{hoofdcategorie}'")
+                        subverdeling = df1[df1["hoofdcategorie"] == hoofdcategorie]["subcategorie"].value_counts()
+                        if not subverdeling.empty:
+                            st.bar_chart(subverdeling)
+
+                    st.markdown("#### 🧭 Verdeling per bron")
+                    bronverdeling = df1["bron"].value_counts()
+                    if not bronverdeling.empty:
+                        fig_bron, ax_bron = plt.subplots()
+                        fig_bron.patch.set_facecolor("black")
+                        ax_bron.pie(bronverdeling, labels=bronverdeling.index, autopct="%1.1f%%",
+                                    textprops={'color': 'white'})
+                        ax_bron.set_title("Verdeling meldingen per bron", color='white')
+                        st.pyplot(fig_bron, use_container_width=True)
+
+            # === 🗺️ Kaart met meldingen ===
             elif weergave_optie == "🗺️ Meldingen op de kaart":
                 gebied_coords = {
                     "Woensel Noord": (6, 9),
@@ -177,7 +223,7 @@ if st.session_state.get("data_ok", False):
                         ax3.text(x, y + 0.3, f"{gebied}\n{aantal}", ha="center", va="bottom", color="white", fontsize=9)
                 st.pyplot(fig3, use_container_width=True)
 
-            # === Totaal aantal meldingen per hoofdcategorie (metrics + subverdeling) ===
+            # === 📋 Metrics per hoofdcategorie ===
             elif weergave_optie == "📋 Totaal aantal meldingen per hoofdcategorie":
                 st.markdown("#### 📋 Totaal aantal meldingen per hoofdcategorie")
                 totaal_per_categorie = df1["hoofdcategorie"].value_counts()
@@ -208,7 +254,7 @@ if st.session_state.get("data_ok", False):
                                     columns={"index": "Subcategorie"}), use_container_width=True)
                 st.session_state["grafiek_kwadrant1"] = None
 
-            # === Meldingen per wijk ===
+            # === 🏘️ Meldingen per wijk ===
             elif weergave_optie == "🏘️ Meldingen per wijk":
                 st.markdown("#### 🏘️ Aantal meldingen per wijk")
                 wijk_verdeling = df1["wijk"].value_counts()
@@ -226,7 +272,7 @@ if st.session_state.get("data_ok", False):
                     ax4.tick_params(axis='y', colors='white')
                     st.pyplot(fig4, use_container_width=True)
 
-                # ===================== KWADRANT 2: WORKLOAD ===================== #
+        # ===================== KWADRANT 2: WORKLOAD ===================== #
 
         with col_rechts:
             st.markdown("### 🧱 Workload per team")
@@ -237,20 +283,12 @@ if st.session_state.get("data_ok", False):
                 "📋 Totaal aantal klachten per team"
             ], horizontal=False)
 
-            # Filters
-            hoofdcategorie_w = st.selectbox("Hoofdcategorie (Workload)",
-                                            ["Alles"] + sorted(df["hoofdcategorie"].dropna().unique()))
-            subcategorie_w = st.selectbox("Subcategorie (Workload)",
-                                          ["Alles"] + sorted(df["subcategorie"].dropna().unique()))
-            bron_w = st.selectbox("Bron (Workload)", ["Alles"] + sorted(df["bron"].dropna().unique()))
+            # Filter op status
+            status_filter = st.selectbox("Status", ["Alles"] + sorted(df["status"].dropna().unique()))
 
             df2 = df.copy()
-            if hoofdcategorie_w != "Alles":
-                df2 = df2[df2["hoofdcategorie"] == hoofdcategorie_w]
-            if subcategorie_w != "Alles":
-                df2 = df2[df2["subcategorie"] == subcategorie_w]
-            if bron_w != "Alles":
-                df2 = df2[df2["bron"] == bron_w]
+            if status_filter != "Alles":
+                df2 = df2[df2["status"] == status_filter]
 
             if workload_optie == "📊 Staafdiagram per status":
                 df_grouped = df2.groupby(["team", "status"]).size().unstack(fill_value=0)
@@ -273,11 +311,11 @@ if st.session_state.get("data_ok", False):
                     st.session_state["grafiek_kwadrant4"] = fig2
 
             elif workload_optie == "📋 Totaal aantal klachten per team":
-                totaal_per_team = df2["team"].value_counts()
+                totaal_per_team = df2["team"].value_counts().sort_values(ascending=False)
                 if totaal_per_team.empty:
                     st.info("Geen meldingen gevonden.")
                 else:
-                    st.markdown("#### 📋 Totaal aantal klachten per team")
+                    st.markdown("#### 📋 Aantal klachten per team")
                     for team, aantal in totaal_per_team.items():
                         st.metric(label=team, value=int(aantal))
 
@@ -285,23 +323,29 @@ if st.session_state.get("data_ok", False):
         # ===================== KWADRANT 3: Tevredenheid ======
         if st.session_state.get("data_ok", False):
             df = st.session_state["data"]
+
+            # Extra optie: reset alle filters
+            reset_optie = st.radio("Filteroptie:", ["✅ Alles tonen", "🔎 Filters gebruiken"], horizontal=True)
+
             # Maak linker- en rechterkolom aan
             col_links, col_rechts = st.columns(2)
 
             with col_links:
                 st.header("🧭 Klantreis per team")
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    geselecteerd_team = st.selectbox("Filter op team",
-                                                     ["Alles"] + sorted(df["team"].dropna().unique()))
-                with col2:
-                    geselecteerde_termijn = st.selectbox("Filter op behandeltermijn",
-                                                         ["Alles"] + sorted(
-                                                             df["behandeltermijn"].dropna().unique()))
-                with col3:
-                    geselecteerde_hoofdcategorie = st.selectbox("Filter op hoofdcategorie",
-                                                                ["Alles"] + sorted(
-                                                                    df["hoofdcategorie"].dropna().unique()))
+
+                if reset_optie == "🔎 Filters gebruiken":
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        geselecteerd_team = st.selectbox("Filter op team",
+                                                         ["Alles"] + sorted(df["team"].dropna().unique()))
+                    with col2:
+                        geselecteerde_termijn = st.selectbox("Filter op behandeltermijn", ["Alles"] + sorted(
+                            df["behandeltermijn"].dropna().unique()))
+                    with col3:
+                        geselecteerde_hoofdcategorie = st.selectbox("Filter op hoofdcategorie", ["Alles"] + sorted(
+                            df["hoofdcategorie"].dropna().unique()))
+                else:
+                    geselecteerd_team = geselecteerde_termijn = geselecteerde_hoofdcategorie = "Alles"
 
                 df_filtered = df.copy()
 
@@ -312,172 +356,184 @@ if st.session_state.get("data_ok", False):
                 if geselecteerde_hoofdcategorie != "Alles":
                     df_filtered = df_filtered[df_filtered["hoofdcategorie"] == geselecteerde_hoofdcategorie]
 
+                gewenste_volgorde = ["Zeer ontevreden", "Ontevreden", "Neutraal", "Tevreden", "Zeer tevreden",
+                                     "Onbekend"]
+
                 # Toevoegen van radioknop voor weergave
                 weergave_tevredenheid = st.radio("Kies uw weergave:", [
                     "📊 Tevredenheid per team (grafiek)",
-                    "📋 Totaal aantal meldingen per tevredenheidsniveau"
+                    "🏆 Top 10 (per tevredenheidsniveau)"
                 ], horizontal=False)
 
-                df_counts = df_filtered.groupby(["team", "tevredenheid"]).size().unstack(fill_value=0)
-                gewenste_volgorde = ["Zeer ontevreden", "Ontevreden", "Neutraal", "Tevreden",
-                                     "Zeer tevreden", "Onbekend"]
+                # Extra filter op tevredenheid onder de st.radio
+                tevredenheidsfilter = st.selectbox("Filter op tevredenheidsniveau (voor top 10 weergave)",
+                                                   gewenste_volgorde)
 
-                for cat in gewenste_volgorde:
-                    if cat not in df_counts.columns:
-                        df_counts[cat] = 0
-                df_counts = df_counts[gewenste_volgorde]
+                if weergave_tevredenheid == "📊 Tevredenheid per team (grafiek)":
+                    df_counts = df_filtered.groupby(["team", "tevredenheid"]).size().unstack(fill_value=0)
+                    for cat in gewenste_volgorde:
+                        if cat not in df_counts.columns:
+                            df_counts[cat] = 0
+                    df_counts = df_counts[gewenste_volgorde]
 
-                if df_counts.empty:
-                    st.info("Geen data beschikbaar voor deze combinatie van filters.")
-                elif weergave_tevredenheid == "📊 Tevredenheid per team (grafiek)":
-                    fig, ax = plt.subplots(figsize=(10, 5))
-                    fig.patch.set_facecolor("black")
-                    ax.set_facecolor("black")
-                    bottom = None
-                    kleuren = ["darkred", "red", "gray", "limegreen", "darkgreen", "orange"]
-                    ax.set_title("Tevredenheid per team (volledige verdeling)", color="white")
-                    ax.set_xlabel("Aantal klachten", color='white')
-                    ax.set_ylabel("Team", color='white')
+                    if df_counts.empty:
+                        st.info("Geen data beschikbaar voor deze combinatie van filters.")
+                    else:
+                        fig, ax = plt.subplots(figsize=(10, 5))
+                        fig.patch.set_facecolor("black")
+                        ax.set_facecolor("black")
+                        bottom = None
+                        kleuren = ["darkred", "red", "gray", "limegreen", "darkgreen", "orange"]
+                        ax.set_title("Tevredenheid per team (volledige verdeling)", color="white")
+                        ax.set_xlabel("Aantal klachten", color='white')
+                        ax.set_ylabel("Team", color='white')
 
-                    for i, cat in enumerate(gewenste_volgorde):
-                        ax.barh(df_counts.index, df_counts[cat], left=bottom, label=cat, color=kleuren[i])
-                        bottom = df_counts[cat] if bottom is None else bottom + df_counts[cat]
+                        for i, cat in enumerate(gewenste_volgorde):
+                            ax.barh(df_counts.index, df_counts[cat], left=bottom, label=cat, color=kleuren[i])
+                            bottom = df_counts[cat] if bottom is None else bottom + df_counts[cat]
 
-                    ax.tick_params(axis='x', colors='white')
-                    ax.tick_params(axis='y', colors='white')
-                    ax.legend(title="Tevredenheid", facecolor="black", edgecolor="white",
-                              labelcolor="white")
-                    st.pyplot(fig)
-                    st.session_state["grafiek_kwadrant5"] = fig
-                else:
-                    totaal_tevredenheid = df_filtered["tevredenheid"].value_counts().reindex(
-                        gewenste_volgorde, fill_value=0)
-                    st.markdown("#### 📋 Totaal aantal meldingen per tevredenheidsniveau")
-                    styled_table = totaal_tevredenheid.rename("Aantal").reset_index().rename(
-                        columns={"index": "Tevredenheid"})
-                    st.dataframe(
-                        styled_table.style.set_properties(
-                            **{"background-color": "black", "color": "white"}
-                        ),
-                        use_container_width=True
-                    )
+                        ax.tick_params(axis='x', colors='white')
+                        ax.tick_params(axis='y', colors='white')
+                        ax.legend(title="Tevredenheid", facecolor="black", edgecolor="white", labelcolor="white")
+                        st.pyplot(fig)
+                        st.session_state["grafiek_kwadrant5"] = fig
+
+                elif weergave_tevredenheid == "🏆 Top 10 (per tevredenheidsniveau)":
+                    st.markdown(f"#### 🏆 Top 10 meldingen met '{tevredenheidsfilter}'")
+                    col_team, col_cat = st.columns(2)
+
+                    with col_team:
+                        top_teams = df_filtered[df_filtered["tevredenheid"] == tevredenheidsfilter][
+                            "team"].value_counts().head(10)
+                        st.markdown("##### Teams")
+                        for team, aantal in top_teams.items():
+                            st.metric(label=team, value=aantal)
+
+                    with col_cat:
+                        top_cats = df_filtered[df_filtered["tevredenheid"] == tevredenheidsfilter][
+                            "hoofdcategorie"].value_counts().head(10)
+                        st.markdown("##### Hoofdcategorieën")
+                        for cat, aantal in top_cats.items():
+                            st.metric(label=cat, value=aantal)
+
+
 
             # ===== RECHTERKWADRANT: Wijzigingen (ML) =====
-            with col_rechts:
-                st.header("⏱️ Klachten binnen/buiten behandeltermijn")
+    with col_rechts:
+        st.header("⏱️ Klachten binnen/buiten behandeltermijn")
 
-                # Filter op status
-                df_afgehandeld = df[df["status"] == "Afgehandelde klacht"].copy()
-                df_afgehandeld["behandelsduur"] = pd.to_numeric(df_afgehandeld["behandelsduur"], errors="coerce")
-
-
-                # Extract aantal dagen uit behandeltermijn
-                def extract_dagen(termijn):
-                    try:
-                        return int(termijn.split()[0])
-                    except:
-                        return None
+        # Filter op status
+        df_afgehandeld = df[df["status"] == "Afgehandelde klacht"].copy()
+        df_afgehandeld["behandelsduur"] = pd.to_numeric(df_afgehandeld["behandelsduur"], errors="coerce")
 
 
-                df_afgehandeld["termijn_dagen"] = df_afgehandeld["behandeltermijn"].apply(extract_dagen)
-                df_afgehandeld = df_afgehandeld.dropna(subset=["behandelsduur", "termijn_dagen"])
-                df_afgehandeld["binnen_termijn"] = df_afgehandeld["behandelsduur"] <= df_afgehandeld["termijn_dagen"]
-
-                # Selectie per hoofdcategorie via selectbox
-                categorie_optie = st.selectbox("Selecteer een hoofdcategorie:",
-                                               ["Alles"] + sorted(df_afgehandeld["hoofdcategorie"].dropna().unique()))
-
-                if categorie_optie != "Alles":
-                    df_afgehandeld = df_afgehandeld[df_afgehandeld["hoofdcategorie"] == categorie_optie]
-
-                # Selectie per subcategorie gebaseerd op hoofdcategorie
-                beschikbare_subcategorieen = df_afgehandeld["subcategorie"].dropna().unique()
-                subcategorie_optie = st.selectbox("Selecteer een subcategorie:",
-                                                  ["Alles"] + sorted(beschikbare_subcategorieen))
-
-                if subcategorie_optie != "Alles":
-                    df_afgehandeld = df_afgehandeld[df_afgehandeld["subcategorie"] == subcategorie_optie]
-
-                binnen = df_afgehandeld["binnen_termijn"].sum()
-                buiten = (~df_afgehandeld["binnen_termijn"]).sum()
-
-                fig_termijn, ax_termijn = plt.subplots()
-                fig_termijn.patch.set_facecolor("black")
-                ax_termijn.set_facecolor("black")
-
-                ax_termijn.pie(
-                    [binnen, buiten],
-                    labels=["Binnen termijn", "Buiten termijn"],
-                    autopct="%1.1f%%",
-                    colors=["limegreen", "red"],
-                    textprops={'color': 'white'},
-                    startangle=90
-                )
-                titel = "Binnen/buiten behandeltermijn"
-                if categorie_optie != "Alles":
-                    titel += f" ({categorie_optie})"
-                    if subcategorie_optie != "Alles":
-                        titel += f" - {subcategorie_optie}"
-
-                ax_termijn.set_title(titel, color="white")
-                ax_termijn.axis("equal")
-
-                st.pyplot(fig_termijn)
-                st.markdown(f"**Binnen termijn:** {binnen} meldingen")
-                st.markdown(f"**Buiten termijn:** {buiten} meldingen")
-
-                st.session_state["grafiek_kwadrant6"] = fig_termijn
-
-            # Stijl voor groene knop met zwarte tekst
-            custom_button = """
-            <style>
-            div.stButton > button {
-                background-color: #32CD32;  /* limegreen */
-                color: black;
-                font-weight: bold;
-                border: none;
-                padding: 0.5em 1em;
-                border-radius: 5px;
-            }
-            </style>
-            """
-            st.markdown(custom_button, unsafe_allow_html=True)
-
-            # Knop zelf
-            if st.button("📄 Genereer PDF"):
-
-                from fpdf import FPDF
-                import tempfile
-                import os
-                from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
-
-                pdf = FPDF()
-                pdf.set_auto_page_break(auto=True, margin=15)
-                pdf.add_page()
+        # Extract aantal dagen uit behandeltermijn
+        def extract_dagen(termijn):
+            try:
+                return int(termijn.split()[0])
+            except:
+                return None
 
 
-                def add_fig_to_pdf(pdf, fig, titel):
-                    with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmpfile:
-                        canvas = FigureCanvas(fig)
-                        canvas.print_png(tmpfile.name)
-                        tmpfile.close()
-                        pdf.set_font("Arial", "B", 12)
-                        pdf.cell(0, 10, titel, ln=True)
-                        pdf.image(tmpfile.name, w=180)  # breedte 180 mm voor bijna volle pagina
-                        os.unlink(tmpfile.name)
+        df_afgehandeld["termijn_dagen"] = df_afgehandeld["behandeltermijn"].apply(extract_dagen)
+        df_afgehandeld = df_afgehandeld.dropna(subset=["behandelsduur", "termijn_dagen"])
+        df_afgehandeld["binnen_termijn"] = df_afgehandeld["behandelsduur"] <= df_afgehandeld["termijn_dagen"]
+
+        # Selectie per hoofdcategorie via selectbox
+        categorie_optie = st.selectbox("Selecteer een hoofdcategorie:",
+                                       ["Alles"] + sorted(df_afgehandeld["hoofdcategorie"].dropna().unique()))
+
+        if categorie_optie != "Alles":
+            df_afgehandeld = df_afgehandeld[df_afgehandeld["hoofdcategorie"] == categorie_optie]
+
+        # Selectie per subcategorie gebaseerd op hoofdcategorie
+        beschikbare_subcategorieen = df_afgehandeld["subcategorie"].dropna().unique()
+        subcategorie_optie = st.selectbox("Selecteer een subcategorie:",
+                                          ["Alles"] + sorted(beschikbare_subcategorieen))
+
+        if subcategorie_optie != "Alles":
+            df_afgehandeld = df_afgehandeld[df_afgehandeld["subcategorie"] == subcategorie_optie]
+
+        binnen = df_afgehandeld["binnen_termijn"].sum()
+        buiten = (~df_afgehandeld["binnen_termijn"]).sum()
+
+        fig_termijn, ax_termijn = plt.subplots()
+        fig_termijn.patch.set_facecolor("black")
+        ax_termijn.set_facecolor("black")
+
+        ax_termijn.pie(
+            [binnen, buiten],
+            labels=["Binnen termijn", "Buiten termijn"],
+            autopct="%1.1f%%",
+            colors=["limegreen", "red"],
+            textprops={'color': 'white'},
+            startangle=90
+        )
+        titel = "Binnen/buiten behandeltermijn"
+        if categorie_optie != "Alles":
+            titel += f" ({categorie_optie})"
+            if subcategorie_optie != "Alles":
+                titel += f" - {subcategorie_optie}"
+
+        ax_termijn.set_title(titel, color="white")
+        ax_termijn.axis("equal")
+
+        st.pyplot(fig_termijn)
+        st.markdown(f"**Binnen termijn:** {binnen} meldingen")
+        st.markdown(f"**Buiten termijn:** {buiten} meldingen")
+
+        st.session_state["grafiek_kwadrant6"] = fig_termijn
+
+    # Stijl voor groene knop met zwarte tekst
+    custom_button = """
+    <style>
+    div.stButton > button {
+        background-color: #32CD32;  /* limegreen */
+        color: black;
+        font-weight: bold;
+        border: none;
+        padding: 0.5em 1em;
+        border-radius: 5px;
+    }
+    </style>
+    """
+    st.markdown(custom_button, unsafe_allow_html=True)
+
+    # Knop zelf
+    if st.button("📄 Genereer PDF"):
+
+        from fpdf import FPDF
+        import tempfile
+        import os
+        from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
+
+        pdf = FPDF()
+        pdf.set_auto_page_break(auto=True, margin=15)
+        pdf.add_page()
 
 
-                if "grafiek_kwadrant1" in st.session_state:
-                    add_fig_to_pdf(pdf, st.session_state["grafiek_kwadrant1"], " Klachten in de tijd")
+        def add_fig_to_pdf(pdf, fig, titel):
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmpfile:
+                canvas = FigureCanvas(fig)
+                canvas.print_png(tmpfile.name)
+                tmpfile.close()
+                pdf.set_font("Arial", "B", 12)
+                pdf.cell(0, 10, titel, ln=True)
+                pdf.image(tmpfile.name, w=180)  # breedte 180 mm voor bijna volle pagina
+                os.unlink(tmpfile.name)
 
-                if "grafiek_kwadrant3" in st.session_state:
-                    add_fig_to_pdf(pdf, st.session_state["grafiek_kwadrant3"], "Klantreis per team")
 
-                if "grafiek_kwadrant4" in st.session_state:
-                    add_fig_to_pdf(pdf, st.session_state["grafiek_kwadrant4"], " Aantal keer correct afgehandeld")
+        if "grafiek_kwadrant1" in st.session_state:
+            add_fig_to_pdf(pdf, st.session_state["grafiek_kwadrant1"], " Klachten in de tijd")
 
-                # Downloadlink tonen
-                with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as output:
-                    pdf.output(output.name)
-                    with open(output.name, "rb") as file:
-                        st.download_button("📥 Download PDF", file, file_name="dashboard.pdf", mime="application/pdf")
+        if "grafiek_kwadrant3" in st.session_state:
+            add_fig_to_pdf(pdf, st.session_state["grafiek_kwadrant3"], "Klantreis per team")
+
+        if "grafiek_kwadrant4" in st.session_state:
+            add_fig_to_pdf(pdf, st.session_state["grafiek_kwadrant4"], " Aantal keer correct afgehandeld")
+
+        # Downloadlink tonen
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as output:
+            pdf.output(output.name)
+            with open(output.name, "rb") as file:
+                st.download_button("📥 Download PDF", file, file_name="dashboard.pdf", mime="application/pdf")
