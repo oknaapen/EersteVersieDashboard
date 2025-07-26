@@ -8,8 +8,8 @@ def generate_complaint_data(aantal=20000, bestandsnaam="klacht.csv"):
     achternamen = ["Jansen", "de Vries", "Bakker", "van Dijk", "Visser", "Smit", "Meijer", "Mulder", "de Boer", "Koster"]
     domeinen = ["@gmail.com", "@hotmail.com", "@outlook.com", "@voorbeeld.nl"]
     status_lijst = ["Afgehandelde klacht", "In behandeling", "Heropend", "Geannuleerd", "Openstaand"]
-    bron_lijst = ["telefoon", "internet", "app", "formulier", "onbekend"]
-    tevredenheidsniveaus = ["Zeer tevreden", "Tevreden", "Neutraal", "Ontevreden", "Zeer ontevreden"]
+
+    tevredenheidsniveaus = ["Zeer tevreden", "Tevreden", "Neutraal", "Ontevreden", "Zeer ontevreden", "Ontevreden", "Ontevreden"]
 
     gebied_wijk_dict = {
         "Centrum": ["Binnenstad", "De Bergen", "Fellenoord", "TU-terrein", "Witte Dame"],
@@ -20,6 +20,16 @@ def generate_complaint_data(aantal=20000, bestandsnaam="klacht.csv"):
         "Strijp": ["Oud-Strijp", "Halve Maan", "Meerhoven"],
         "Gestel": ["Rozenknopje", "Oud-Gestel", "Oud Kasteel"]
     }
+
+    gebied_gewichten = {
+        "Centrum": 30,
+        "Stratum": 15,
+        "Tongelre": 15,
+        "Woensel Zuid": 23,
+        "Woensel Noord": 15,
+        "Strijp": 8,
+        "Gestel": 4
+            }
 
     categorie_dict = {
         "Afval en reiniging": [
@@ -87,8 +97,35 @@ def generate_complaint_data(aantal=20000, bestandsnaam="klacht.csv"):
             ("Dode of gewonde dieren - op straat", "1 dag", "Team Handhaving"),
             ("Dode of gewonde dieren - in openbaar groen", "2 dagen", "Team Handhaving"),
             ("Overlast door dieren", "7 dagen", "Team Handhaving")
-        ]
+        ],
     }
+
+    categorie_gewichten = {
+        "Afval en reiniging": 50,
+        "Verkeer en wegen": 5,
+        "Straatverlichting": 3,
+        "Groenvoorziening": 1,
+        "Spelen en sport": 1,
+        "Geluidsoverlast": 4,
+        "Vandalisme": 4,
+        "Illegale activiteiten": 3,
+        "Bouwvergunning": 3,
+        "Woningtoezicht": 4,
+        "Parkeerproblemen": 6,
+        "Openbaar vervoer": 4,
+        "Zorg en ondersteuning": 5,
+        "Jeugdzorg": 3,
+        "Dieren": 4
+    }
+
+    bron_dict = {
+        "telefoon": 30,
+        "internet": 30,
+        "app": 80,
+        "formulier": 15,
+        "onbekend": 5
+    }
+
 
     start_datum = datetime(2025, 1, 28)
     eind_datum = datetime(2025, 2, 26)
@@ -105,13 +142,23 @@ def generate_complaint_data(aantal=20000, bestandsnaam="klacht.csv"):
         email = f"{voornaam.lower()}.{achternaam.lower()}{random.randint(1,999)}{domein}" if random.random() > 0.1 else None
         telefoon = f"06{random.randint(10000000, 99999999)}" if random.random() > 0.15 else None
 
-        hoofdcategorie = random.choice(list(categorie_dict.keys()))
+        hoofdcategorie = random.choices(
+            population=list(categorie_dict.keys()),
+            weights=[categorie_gewichten[k] for k in categorie_dict.keys()]
+        )[0]
+
         subcategorie, behandeltermijn, standaard_team = random.choice(categorie_dict[hoofdcategorie])
 
         status = random.choice(status_lijst)
-        bron = random.choices(bron_lijst, weights=[30, 30, 20, 15, 5])[0]
 
-        gebied = random.choice(list(gebied_wijk_dict.keys()))
+        bron = random.choices(list(bron_dict.keys()), weights=bron_dict.values())[0]
+
+        gebied = random.choices(
+            population=list(gebied_wijk_dict.keys()),
+            weights=[gebied_gewichten[k] for k in gebied_wijk_dict.keys()]
+        )[0]
+
+
         wijk = random.choice(gebied_wijk_dict[gebied])
 
 
@@ -163,6 +210,6 @@ def generate_complaint_data(aantal=20000, bestandsnaam="klacht.csv"):
 
 
 # Voorbeeld van gebruik:
-generate_complaint_data(4000, "klachten.csv")
+generate_complaint_data(4000, "test_1.csv")
 
 ["Alles"] + sorted(df["team"].dropna().unique())

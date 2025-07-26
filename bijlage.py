@@ -47,3 +47,41 @@ subcategorie_dict = {
         "Dode of gewonde dieren - op straat", "Dode of gewonde dieren - in openbaar groen", "Overlast door dieren"
     ]
 }
+
+# Mapping van alternatieve kolomnamen naar standaardnamen
+kolom_aliases = {
+    "hoofdcategorie": "hoofdcategorie",
+    "hoofdonderwerp": "hoofdcategorie",
+    "categorie": "hoofdcategorie",
+
+    "subcategorie": "subcategorie",
+    "subonderwerp": "subcategorie",
+
+    "gebiedsdeel": "gebied",
+    "locatie": "gebied",
+
+    "wijknaam": "wijk",
+
+    "teamnaam": "team",
+
+    "tevreden": "tevredenheid",
+
+    # enzovoort: voeg zelf realistische varianten toe
+}
+#horizontale scroll voor heel de dataset
+#st.selectbox maand moet vervangen worden voor totaal aantal meldingen
+#de thema's staan er veel te veel in
+
+
+#filters die weg moeten
+#subcategorie, Team
+#weken op de x as moeten netter.
+
+
+
+
+#lijngrafiek
+
+
+
+
